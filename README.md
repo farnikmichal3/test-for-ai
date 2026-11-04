@@ -1,0 +1,1 @@
+Ahoj. Tohle je test gitu pro budouci projekty. Abych veděl že se k tomu AI v pohodě dostane.
