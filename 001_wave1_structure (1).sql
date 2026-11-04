@@ -161,7 +161,7 @@ CREATE TABLE product_category (
     KEY idx_product_category_category (category_id, sort_order),
     CONSTRAINT fk_product_category_product FOREIGN KEY (product_id)
         REFERENCES product (id) ON DELETE CASCADE,
-    CONSTRAINT fk_product_category_category KEY (category_id) REFERENCES category (id) ON DELETE CASCADE
+    CONSTRAINT fk_product_category_category FOREIGN KEY (category_id) REFERENCES category (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE attribute (
