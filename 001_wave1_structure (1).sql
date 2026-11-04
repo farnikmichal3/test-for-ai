@@ -2,18 +2,12 @@
 -- ArgoMi-bestshop · vlna 1 (varianty, atributy, volby zákazníka, košík, objednávka,
 -- jazyky a měny)
 -- MySQL 8.0.16+ · InnoDB · utf8mb4
---
--- Všechna integritní omezení byla posílena na úrovni DB engine.
--- =============================================================================
-
--- =============================================================================
--- MODUL: Core (jazyky, měny, jednotky, systémové překlady)
 -- =============================================================================
 
 CREATE TABLE language (
     id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    code         VARCHAR(10)  NOT NULL COMMENT 'např. cs, en',
-    name         VARCHAR(100) NOT NULL COMMENT 'název jazyka jeho vlastním jazykem',
+    code         VARCHAR(10)  NOT NULL,
+    name         VARCHAR(100) NOT NULL,
     is_default   TINYINT(1) NOT NULL DEFAULT 0,
     is_active    TINYINT(1) NOT NULL DEFAULT 1,
     sort_order   INT NOT NULL DEFAULT 0,
@@ -26,10 +20,10 @@ CREATE TABLE language (
 
 CREATE TABLE currency (
     id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    code         CHAR(3)      NOT NULL COMMENT 'ISO 4217, např. CZK, EUR',
+    code         CHAR(3)      NOT NULL,
     name         VARCHAR(100) NOT NULL,
     symbol       VARCHAR(8)   NOT NULL,
-    minor_units  TINYINT UNSIGNED NOT NULL DEFAULT 2 COMMENT 'počet desetinných míst (ISO 4217)',
+    minor_units  TINYINT UNSIGNED NOT NULL DEFAULT 2,
     is_default   TINYINT(1) NOT NULL DEFAULT 0,
     is_active    TINYINT(1) NOT NULL DEFAULT 1,
     sort_order   INT NOT NULL DEFAULT 0,
@@ -42,7 +36,7 @@ CREATE TABLE currency (
 
 CREATE TABLE unit (
     id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    code       VARCHAR(20) NOT NULL COMMENT 'např. pcs, kg, m, m2, W',
+    code       VARCHAR(20) NOT NULL,
     is_active  TINYINT(1) NOT NULL DEFAULT 1,
     sort_order INT NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
@@ -53,8 +47,8 @@ CREATE TABLE unit_translation (
     id      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     unit_id BIGINT UNSIGNED NOT NULL,
     locale  VARCHAR(10)  NOT NULL,
-    symbol  VARCHAR(20)  NOT NULL COMMENT 'např. kg, W, ks, m²',
-    name    VARCHAR(255) NOT NULL COMMENT 'ICU MessageFormat s množnými tvary',
+    symbol  VARCHAR(20)  NOT NULL,
+    name    VARCHAR(255) NOT NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uq_unit_translation (unit_id, locale),
     CONSTRAINT fk_unit_translation_unit FOREIGN KEY (unit_id)
@@ -63,24 +57,20 @@ CREATE TABLE unit_translation (
 
 CREATE TABLE translation_message (
     id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    domain        VARCHAR(50)  NOT NULL COMMENT 'např. catalog, checkout, emails, admin, validation',
-    message_key   VARCHAR(190) NOT NULL COMMENT 'např. cart.empty, button.add_to_cart',
+    domain        VARCHAR(50)  NOT NULL,
+    message_key   VARCHAR(190) NOT NULL,
     locale        VARCHAR(10)  NOT NULL,
-    message_text  TEXT NOT NULL COMMENT 'ICU MessageFormat; prostý text, vždy se escapuje (žádné HTML)',
+    message_text  TEXT NOT NULL,
     source        ENUM('core','custom') NOT NULL DEFAULT 'core',
     is_customized TINYINT(1) NOT NULL DEFAULT 0,
     default_hash  CHAR(40) NULL,
     is_outdated   TINYINT(1) NOT NULL DEFAULT 0,
     updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    updated_by    BIGINT UNSIGNED NULL COMMENT 'ref → Admin (bez FK)',
+    updated_by    BIGINT UNSIGNED NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uq_translation_message (domain, locale, message_key),
     KEY idx_translation_message_review (is_outdated, domain)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- =============================================================================
--- MODUL: Tax
--- =============================================================================
 
 CREATE TABLE tax_class (
     id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -94,24 +84,21 @@ CREATE TABLE tax_rate (
     id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     tax_class_id BIGINT UNSIGNED NOT NULL,
     country_code CHAR(2)      NOT NULL,
-    rate_bp      INT UNSIGNED NOT NULL COMMENT 'basis points: 2100 = 21 %',
+    rate_bp      INT UNSIGNED NOT NULL,
     valid_from   DATE NOT NULL,
     valid_to     DATE NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uq_tax_rate (tax_class_id, country_code, valid_from),
     CONSTRAINT fk_tax_rate_class FOREIGN KEY (tax_class_id)
-        REFERENCES tax_class (id) ON DELETE CASCADE
+        REFERENCES tax_class (id) ON DELETE CASCADE,
+    CONSTRAINT ck_tax_rate_dates CHECK (valid_to IS NULL OR valid_to >= valid_from)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- =============================================================================
--- MODUL: Catalog
--- =============================================================================
 
 CREATE TABLE product (
     id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    code         VARCHAR(100) NOT NULL COMMENT 'interní stabilní kód',
+    code         VARCHAR(100) NOT NULL,
     status       ENUM('draft','active','archived') NOT NULL DEFAULT 'draft',
-    tax_class_id BIGINT UNSIGNED NOT NULL COMMENT 'ref → Tax (bez FK)',
+    tax_class_id BIGINT UNSIGNED NOT NULL,
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
@@ -127,7 +114,7 @@ CREATE TABLE product_translation (
     name             VARCHAR(255) NOT NULL,
     slug             VARCHAR(255) NOT NULL,
     short_description TEXT NULL,
-    description      MEDIUMTEXT NULL COMMENT 'HTML očištěné při uložení (HTMLPurifier)',
+    description      MEDIUMTEXT NULL,
     meta_title       VARCHAR(255) NULL,
     meta_description VARCHAR(500) NULL,
     PRIMARY KEY (id),
@@ -174,17 +161,14 @@ CREATE TABLE product_category (
     KEY idx_product_category_category (category_id, sort_order),
     CONSTRAINT fk_product_category_product FOREIGN KEY (product_id)
         REFERENCES product (id) ON DELETE CASCADE,
-    CONSTRAINT fk_product_category_category FOREIGN KEY (category_id)
-        REFERENCES category (id) ON DELETE CASCADE
+    CONSTRAINT fk_product_category_category KEY (category_id) REFERENCES category (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- ---- Atributy a striktní integrita hodnot -----------------------------------
 
 CREATE TABLE attribute (
     id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     code          VARCHAR(100) NOT NULL,
     type          ENUM('text','number','enum','bool') NOT NULL,
-    unit_id       BIGINT UNSIGNED NULL COMMENT 'ref → Core.unit (bez FK)',
+    unit_id       BIGINT UNSIGNED NULL,
     is_filterable TINYINT(1) NOT NULL DEFAULT 0,
     sort_order    INT NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
@@ -308,8 +292,6 @@ CREATE TABLE product_variant_attribute_value (
     )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- ---- Volby zákazníka -------------------------------------------------------
-
 CREATE TABLE product_option (
     id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     product_id  BIGINT UNSIGNED NOT NULL,
@@ -356,8 +338,6 @@ CREATE TABLE product_option_value_translation (
         REFERENCES product_option_value (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- ---- Vztahy a obrázky -------------------------------------------------------
-
 CREATE TABLE product_relation (
     id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     product_id         BIGINT UNSIGNED NOT NULL,
@@ -375,7 +355,7 @@ CREATE TABLE product_relation (
 CREATE TABLE product_image (
     id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     product_id         BIGINT UNSIGNED NOT NULL,
-    product_variant_id BIGINT UNSIGNED NULL COMMENT 'NULL = obrázek celého produktu',
+    product_variant_id BIGINT UNSIGNED NULL,
     file_path          VARCHAR(500) NOT NULL,
     alt_text           VARCHAR(255) NULL,
     sort_order         INT NOT NULL DEFAULT 0,
@@ -384,16 +364,12 @@ CREATE TABLE product_image (
     CONSTRAINT fk_product_image_product FOREIGN KEY (product_id)
         REFERENCES product (id) ON DELETE CASCADE,
     CONSTRAINT fk_product_image_variant_composite FOREIGN KEY (product_variant_id, product_id)
-        REFERENCES product_variant (id, product_id) ON DELETE SET NULL
+        REFERENCES product_variant (id, product_id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- =============================================================================
--- MODUL: Pricing
--- =============================================================================
 
 CREATE TABLE variant_price (
     id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    product_variant_id BIGINT UNSIGNED NOT NULL COMMENT 'ref → Catalog (bez FK)',
+    product_variant_id BIGINT UNSIGNED NOT NULL,
     currency           CHAR(3) NOT NULL,
     amount_minor       BIGINT NOT NULL,
     tax_included       TINYINT(1) NOT NULL DEFAULT 1,
@@ -404,20 +380,16 @@ CREATE TABLE variant_price (
 
 CREATE TABLE option_value_price (
     id                      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    product_option_value_id BIGINT UNSIGNED NOT NULL COMMENT 'ref → Catalog (bez FK)',
+    product_option_value_id BIGINT UNSIGNED NOT NULL,
     currency                CHAR(3) NOT NULL,
     delta_minor             BIGINT NOT NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uq_option_value_price (product_option_value_id, currency)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- =============================================================================
--- MODUL: Inventory
--- =============================================================================
-
 CREATE TABLE stock_item (
     id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    product_variant_id BIGINT UNSIGNED NOT NULL COMMENT 'ref → Catalog (bez FK)',
+    product_variant_id BIGINT UNSIGNED NOT NULL,
     track_stock        TINYINT(1) NOT NULL DEFAULT 1,
     allow_backorder    TINYINT(1) NOT NULL DEFAULT 0,
     quantity_on_hand   DECIMAL(12,3) NOT NULL DEFAULT 0,
@@ -433,7 +405,7 @@ CREATE TABLE stock_item (
 
 CREATE TABLE stock_movement (
     id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    product_variant_id BIGINT UNSIGNED NOT NULL COMMENT 'ref → Catalog (bez FK)',
+    product_variant_id BIGINT UNSIGNED NOT NULL,
     delta              DECIMAL(12,3) NOT NULL,
     reason             ENUM('receipt','reservation','release','sale','return','adjustment') NOT NULL,
     reference_type     VARCHAR(32) NULL,
@@ -445,13 +417,9 @@ CREATE TABLE stock_movement (
     KEY idx_stock_movement_reference (reference_type, reference_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- =============================================================================
--- MODUL: Customer
--- =============================================================================
-
 CREATE TABLE customer (
     id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    public_id     CHAR(26) NOT NULL COMMENT 'ULID',
+    public_id     CHAR(26) NOT NULL,
     email         VARCHAR(190) NOT NULL,
     password_hash VARCHAR(255) NULL,
     first_name    VARCHAR(100) NULL,
@@ -486,14 +454,10 @@ CREATE TABLE customer_address (
         REFERENCES customer (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- =============================================================================
--- MODUL: Shipping a Payments
--- =============================================================================
-
 CREATE TABLE shipping_method (
     id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     code         VARCHAR(50)  NOT NULL,
-    tax_class_id BIGINT UNSIGNED NOT NULL COMMENT 'ref → Tax (bez FK)',
+    tax_class_id BIGINT UNSIGNED NOT NULL,
     is_active    TINYINT(1) NOT NULL DEFAULT 1,
     sort_order   INT NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
@@ -546,14 +510,10 @@ CREATE TABLE payment_method_translation (
         REFERENCES payment_method (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- =============================================================================
--- MODUL: Cart
--- =============================================================================
-
 CREATE TABLE cart (
     id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    public_id   CHAR(26) NOT NULL COMMENT 'ULID',
-    customer_id BIGINT UNSIGNED NULL COMMENT 'ref → Customer (bez FK)',
+    public_id   CHAR(26) NOT NULL,
+    customer_id BIGINT UNSIGNED NULL,
     currency    CHAR(3) NOT NULL,
     locale      VARCHAR(10) NOT NULL,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -568,12 +528,13 @@ CREATE TABLE cart (
 CREATE TABLE cart_item (
     id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     cart_id            BIGINT UNSIGNED NOT NULL,
-    product_variant_id BIGINT UNSIGNED NOT NULL COMMENT 'ref → Catalog (bez FK)',
+    product_variant_id BIGINT UNSIGNED NOT NULL,
     quantity           DECIMAL(12,3) NOT NULL,
+    configuration_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     KEY idx_cart_item_cart (cart_id),
-    UNIQUE KEY uq_cart_item_variant (cart_id, product_variant_id),
+    UNIQUE KEY uq_cart_item_configuration (cart_id, configuration_hash),
     CONSTRAINT fk_cart_item_cart FOREIGN KEY (cart_id)
         REFERENCES cart (id) ON DELETE CASCADE,
     CONSTRAINT ck_cart_item_quantity CHECK (quantity > 0)
@@ -582,8 +543,8 @@ CREATE TABLE cart_item (
 CREATE TABLE cart_item_option (
     id                      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     cart_item_id            BIGINT UNSIGNED NOT NULL,
-    product_option_id       BIGINT UNSIGNED NOT NULL COMMENT 'ref → Catalog (bez FK)',
-    product_option_value_id BIGINT UNSIGNED NULL     COMMENT 'ref → Catalog',
+    product_option_id       BIGINT UNSIGNED NOT NULL,
+    product_option_value_id BIGINT UNSIGNED NULL,
     text_value              VARCHAR(500) NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uq_cart_item_option (cart_item_id, product_option_id),
@@ -594,30 +555,21 @@ CREATE TABLE cart_item_option (
     )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- =============================================================================
--- MODUL: Orders
--- =============================================================================
-
 CREATE TABLE shop_order (
     id                    BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    public_id             CHAR(26) NOT NULL COMMENT 'ULID',
+    public_id             CHAR(26) NOT NULL,
     order_number          VARCHAR(20) NOT NULL,
-    customer_id           BIGINT UNSIGNED NULL COMMENT 'ref → Customer',
+    customer_id           BIGINT UNSIGNED NULL,
     email                 VARCHAR(190) NOT NULL,
     status                VARCHAR(32) NOT NULL,
     locale                VARCHAR(10) NOT NULL,
     currency              CHAR(3) NOT NULL,
     prices_include_tax    TINYINT(1) NOT NULL DEFAULT 1,
     subtotal_net_minor    BIGINT NOT NULL,
-    shipping_net_minor    BIGINT NOT NULL DEFAULT 0,
     tax_total_minor       BIGINT NOT NULL,
     grand_total_minor     BIGINT NOT NULL,
     billing_address       JSON NOT NULL,
     shipping_address      JSON NOT NULL,
-    shipping_method_code  VARCHAR(50)  NOT NULL,
-    shipping_method_name  VARCHAR(100) NOT NULL,
-    payment_method_code   VARCHAR(50)  NOT NULL,
-    payment_method_name   VARCHAR(100) NOT NULL,
     customer_note         VARCHAR(1000) NULL,
     placed_at             DATETIME NULL,
     created_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -632,8 +584,8 @@ CREATE TABLE shop_order (
 CREATE TABLE shop_order_item (
     id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     shop_order_id       BIGINT UNSIGNED NOT NULL,
-    product_id          BIGINT UNSIGNED NULL COMMENT 'ref → Catalog',
-    product_variant_id  BIGINT UNSIGNED NULL COMMENT 'ref → Catalog',
+    product_id          BIGINT UNSIGNED NULL,
+    product_variant_id  BIGINT UNSIGNED NULL,
     sku                 VARCHAR(64)  NOT NULL,
     product_name        VARCHAR(255) NOT NULL,
     variant_label       VARCHAR(255) NULL,
@@ -663,6 +615,22 @@ CREATE TABLE shop_order_item_option (
     KEY idx_shop_order_item_option_item (shop_order_item_id),
     CONSTRAINT fk_shop_order_item_option_item FOREIGN KEY (shop_order_item_id)
         REFERENCES shop_order_item (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE shop_order_adjustment (
+    id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    shop_order_id BIGINT UNSIGNED NOT NULL,
+    type          ENUM('shipping','payment_fee','discount','surcharge') NOT NULL,
+    code          VARCHAR(50) NOT NULL,
+    title         VARCHAR(255) NOT NULL,
+    amount_net_minor BIGINT NOT NULL,
+    amount_tax_minor BIGINT NOT NULL,
+    amount_gross_minor BIGINT NOT NULL,
+    tax_rate_bp   INT UNSIGNED NOT NULL,
+    PRIMARY KEY (id),
+    KEY idx_shop_order_adjustment_order (shop_order_id),
+    CONSTRAINT fk_shop_order_adjustment_order FOREIGN KEY (shop_order_id)
+        REFERENCES shop_order (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE shop_order_status_history (
